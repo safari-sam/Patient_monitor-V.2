@@ -1,10 +1,3 @@
-// auth.rs - Authentication module with password encryption and JWT tokens
-//
-// This module provides:
-// - Password hashing with bcrypt (encryption)
-// - JWT token generation and verification
-// - User registration and login endpoints
-// - Authentication middleware
 
 use actix_web::{web, HttpRequest, HttpResponse, Error, http::header};
 use bcrypt::{hash, verify, DEFAULT_COST};
