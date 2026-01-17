@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Patient Room Monitor - Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            width: 100%;
+            max-width: 450px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%);
+            padding: 40px 30px;
+            text-align: center;
+            color: white;
+        }
+
+        .header-icon {
+            font-size: 50px;
+            margin-bottom: 15px;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .form-container {
+            padding: 40px 30px;
+        }
+
+        .tab-buttons {
+            display: flex;
+            margin-bottom: 30px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            padding: 5px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #666;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: #0077b6;
+            color: white;
+        }
+
+        .tab-btn:hover:not(.active) {
+            background: #e0e0e0;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #0077b6;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(0, 119, 182, 0.1);
+        }
+
+        .form-group select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            padding-right: 40px;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 119, 182, 0.3);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .form-panel {
+            display: none;
+        }
+
+        .form-panel.active {
+            display: block;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .success-message {
+            background: #d1fae5;
+            color: #059669;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .password-requirements {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .password-requirements ul {
+            margin-left: 20px;
+            margin-top: 5px;
+        }
+
+        .password-requirements li {
+            margin-bottom: 3px;
+        }
+
+        .cadre-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #f0f9ff;
+            border-radius: 8px;
+            margin-top: 8px;
+            font-size: 0.85rem;
+            color: #0369a1;
+        }
+
+        .cadre-info-icon {
+            font-size: 1.2rem;
+        }
+
+        .footer-text {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 0.85rem;
+        }
+
+        .footer-text a {
+            color: #0077b6;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer-text a:hover {
+            text-decoration: underline;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        .submit-btn.loading .spinner {
+            display: inline-block;
+        }
+
+        .submit-btn.loading {
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .header {
+                padding: 30px 20px;
+            }
+            .form-container {
+                padding: 30px 20px;
+            }
+            .header h1 {
+                font-size: 1.3rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="header">
+            <div class="header-icon">🏥</div>
+            <h1>Smart Patient Room Monitor</h1>
+            <p>Healthcare Provider Portal</p>
+        </div>
+
+        <div class="form-container">
+            <div class="tab-buttons">
+                <button class="tab-btn active" onclick="showTab('login')">Sign In</button>
+                <button class="tab-btn" onclick="showTab('signup')">Sign Up</button>
+            </div>
+
+            <div id="error-msg" class="error-message"></div>
+            <div id="success-msg" class="success-message"></div>
+
+            <!-- Login Form -->
+            <div id="login-panel" class="form-panel active">
+                <form id="login-form" onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label for="login-username">Username</label>
+                        <input type="text" id="login-username" name="username" placeholder="Enter your username" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" name="password" placeholder="Enter your password" required>
+                    </div>
+
+                    <button type="submit" class="submit-btn" id="login-btn">
+                        <span class="spinner"></span>
+                        Sign In
+                    </button>
+                </form>
+
+                <p class="footer-text">
+                    Don't have an account? <a href="#" onclick="showTab('signup')">Sign up here</a>
+                </p>
+            </div>
+
+            <!-- Signup Form -->
+            <div id="signup-panel" class="form-panel">
+                <form id="signup-form" onsubmit="handleSignup(event)">
+                    <div class="form-group">
+                        <label for="signup-fullname">Full Name</label>
+                        <input type="text" id="signup-fullname" name="fullname" placeholder="Enter your full name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="signup-username">Username</label>
+                        <input type="text" id="signup-username" name="username" placeholder="Choose a username" required minlength="3">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="signup-email">Email</label>
+                        <input type="email" id="signup-email" name="email" placeholder="Enter your email" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="signup-cadre">Healthcare Role (Cadre)</label>
+                        <select id="signup-cadre" name="cadre" required>
+                            <option value="">Select your role...</option>
+                            <option value="physician">Physician / Doctor</option>
+                            <option value="nurse">Nurse</option>
+                            <option value="physiotherapist">Physiotherapist</option>
+                            <option value="caretaker">Caretaker / Care Assistant</option>
+                        </select>
+                        <div class="cadre-info">
+                            <span class="cadre-info-icon">ℹ️</span>
+                            <span>Your role determines your access level in the system</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="signup-password">Password</label>
+                        <input type="password" id="signup-password" name="password" placeholder="Create a password" required minlength="8">
+                        <div class="password-requirements">
+                            Password must contain:
+                            <ul>
+                                <li>At least 8 characters</li>
+                                <li>One uppercase letter</li>
+                                <li>One number</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="signup-confirm">Confirm Password</label>
+                        <input type="password" id="signup-confirm" name="confirm" placeholder="Confirm your password" required>
+                    </div>
+
+                    <button type="submit" class="submit-btn" id="signup-btn">
+                        <span class="spinner"></span>
+                        Create Account
+                    </button>
+                </form>
+
+                <p class="footer-text">
+                    Already have an account? <a href="#" onclick="showTab('login')">Sign in here</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function showTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.tab-btn:${tab === 'login' ? 'first-child' : 'last-child'}`).classList.add('active');
+
+            // Update panels
+            document.querySelectorAll('.form-panel').forEach(panel => panel.classList.remove('active'));
+            document.getElementById(`${tab}-panel`).classList.add('active');
+
+            // Clear messages
+            hideMessages();
+        }
+
+        // Show/hide messages
+        function showError(message) {
+            const errorEl = document.getElementById('error-msg');
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+            document.getElementById('success-msg').classList.remove('show');
+        }
+
+        function showSuccess(message) {
+            const successEl = document.getElementById('success-msg');
+            successEl.textContent = message;
+            successEl.classList.add('show');
+            document.getElementById('error-msg').classList.remove('show');
+        }
+
+        function hideMessages() {
+            document.getElementById('error-msg').classList.remove('show');
+            document.getElementById('success-msg').classList.remove('show');
+        }
+
+        // Validate password
+        function validatePassword(password) {
+            const hasUpperCase = /[A-Z]/.test(password);
+            const hasNumber = /[0-9]/.test(password);
+            const hasMinLength = password.length >= 8;
+
+            return hasUpperCase && hasNumber && hasMinLength;
+        }
+
+        // Handle Login
+        async function handleLogin(event) {
+            event.preventDefault();
+            hideMessages();
+
+            const btn = document.getElementById('login-btn');
+            btn.classList.add('loading');
+
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Store token in localStorage
+                    localStorage.setItem('authToken', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+
+                    showSuccess('Login successful! Redirecting...');
+
+                    // Redirect to dashboard
+                    setTimeout(() => {
+                        window.location.href = '/index.html';
+                    }, 1000);
+                } else {
+                    showError(data.error || 'Invalid username or password');
+                }
+            } catch (error) {
+                showError('Connection error. Please try again.');
+                console.error('Login error:', error);
+            } finally {
+                btn.classList.remove('loading');
+            }
+        }
+
+        // Handle Signup
+        async function handleSignup(event) {
+            event.preventDefault();
+            hideMessages();
+
+            const btn = document.getElementById('signup-btn');
+            btn.classList.add('loading');
+
+            const fullname = document.getElementById('signup-fullname').value;
+            const username = document.getElementById('signup-username').value;
+            const email = document.getElementById('signup-email').value;
+            const cadre = document.getElementById('signup-cadre').value;
+            const password = document.getElementById('signup-password').value;
+            const confirm = document.getElementById('signup-confirm').value;
+
+            // Validation
+            if (password !== confirm) {
+                showError('Passwords do not match');
+                btn.classList.remove('loading');
+                return;
+            }
+
+            if (!validatePassword(password)) {
+                showError('Password must be at least 8 characters with one uppercase letter and one number');
+                btn.classList.remove('loading');
+                return;
+            }
+
+            if (!cadre) {
+                showError('Please select your healthcare role');
+                btn.classList.remove('loading');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        fullname,
+                        username,
+                        email,
+                        cadre,
+                        password,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSuccess('Account created successfully! Please sign in.');
+                    
+                    // Clear form and switch to login
+                    document.getElementById('signup-form').reset();
+                    setTimeout(() => {
+                        showTab('login');
+                    }, 1500);
+                } else {
+                    showError(data.error || 'Failed to create account');
+                }
+            } catch (error) {
+                showError('Connection error. Please try again.');
+                console.error('Signup error:', error);
+            } finally {
+                btn.classList.remove('loading');
+            }
+        }
+
+        // Check if already logged in
+        window.onload = function() {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                // Verify token is still valid
+                fetch('/api/auth/verify', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                }).then(response => {
+                    if (response.ok) {
+                        window.location.href = '/index.html';
+                    } else {
+                        localStorage.removeItem('authToken');
+                        localStorage.removeItem('user');
+                    }
+                }).catch(() => {
+                    // Token invalid, stay on login page
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('user');
+                });
+            }
+        };
+    </script>
+</body>
+</html>

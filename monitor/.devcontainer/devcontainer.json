@@ -1,0 +1,13 @@
+{
+    "name": "Smart Patient Monitor",
+    "image": "mcr.microsoft.com/devcontainers/base:jammy",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {
+            "version": "latest",
+            "dockerDashComposeVersion": "v2"
+        }
+    },
+    "forwardPorts": [8080, 5432],
+    "postStartCommand": "docker --version && docker-compose --version && echo '✅ Ready! Run: docker-compose up --build'",
+    "remoteUser": "vscode"
+}
