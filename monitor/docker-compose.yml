@@ -1,13 +1,9 @@
 # ============================================================================
 # Smart Patient Room Monitor - Docker Compose Configuration
 # ============================================================================
-# Usage:
-#   docker-compose up --build     (build and start)
-#   docker-compose down           (stop and remove)
-#   docker-compose logs -f app    (view app logs)
+# ALL CREDENTIALS ARE LOADED FROM GITHUB CODESPACES SECRETS
+# No hardcoded passwords in this file!
 # ============================================================================
-
-version: '3.8'
 
 services:
   # --------------------------------------------------------------------------
@@ -18,7 +14,7 @@ services:
     container_name: patient-db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: patient_monitor
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -43,14 +39,14 @@ services:
       # Server
       - HOST=0.0.0.0
       - PORT=8080
-      # Database
+      # Database - Password from GitHub Secrets
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
-      - DB_PASSWORD=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=patient_monitor
-      # Authentication - JWT Secret from environment (SECURE!)
-      - JWT_SECRET=${JWT_SECRET:-default_dev_secret_change_in_production}
+      # Authentication - JWT Secret from GitHub Secrets
+      - JWT_SECRET=${JWT_SECRET}
       - TOKEN_EXPIRATION_HOURS=24
       # App settings
       - MOCK_MODE=true

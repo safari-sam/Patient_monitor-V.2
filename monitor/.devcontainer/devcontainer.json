@@ -8,6 +8,12 @@
         }
     },
     "forwardPorts": [8080, 5432],
-    "postStartCommand": "docker --version && docker-compose --version && echo '✅ Ready! Run: docker-compose up --build'",
+    "portsAttributes": {
+        "8080": {
+            "label": "Dashboard",
+            "onAutoForward": "notify"
+        }
+    },
+    "postStartCommand": "echo '✅ Environment ready!' && echo '👉 Run: docker-compose up --build' && echo '📊 Then open port 8080 from Ports tab'",
     "remoteUser": "vscode"
 }
