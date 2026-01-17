@@ -1,19 +1,10 @@
 {
     "name": "Smart Patient Monitor",
-    "image": "mcr.microsoft.com/devcontainers/base:jammy",
+    "image": "mcr.microsoft.com/devcontainers/universal:2",
     "features": {
-        "ghcr.io/devcontainers/features/docker-in-docker:2": {
-            "version": "latest",
-            "dockerDashComposeVersion": "v2"
-        }
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
     },
     "forwardPorts": [8080, 5432],
-    "portsAttributes": {
-        "8080": {
-            "label": "Dashboard",
-            "onAutoForward": "notify"
-        }
-    },
-    "postStartCommand": "echo '✅ Environment ready!' && echo '👉 Run: docker-compose up --build' && echo '📊 Then open port 8080 from Ports tab'",
-    "remoteUser": "vscode"
+    "postStartCommand": "echo '✅ Ready! Run: docker-compose up --build'",
+    "remoteUser": "codespace"
 }
