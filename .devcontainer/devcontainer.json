@@ -1,36 +1,19 @@
 {
   "name": "Smart Patient Monitor",
-  "dockerComposeFile": "../monitor/docker-compose.yml",
-  "service": "app",
-  "workspaceFolder": "/workspace",
-  
+  "image": "mcr.microsoft.com/devcontainers/base:jammy",
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
-    "ghcr.io/devcontainers/features/git:1": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "dockerDashComposeVersion": "v2"
+    }
   },
-
   "forwardPorts": [8080, 5432],
-  "portsAttributes": {
-    "8080": {
-      "label": "Application",
-      "onAutoForward": "notify"
-    },
-    "5432": {
-      "label": "PostgreSQL"
-    }
-  },
-
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "rust-lang.rust-analyzer",
-        "ms-azuretools.vscode-docker",
-        "esbenp.prettier-vscode"
-      ]
-    }
-  },
-
-  "postCreateCommand": "echo 'Environment ready! Run: cd monitor && docker-compose up --build'",
+  "postStartCommand": "echo '✅ Environment ready!' && echo '👉 Run: docker-compose up --build' && echo '📊 Then open port 8080 from Ports tab'",
   
-  "remoteUser": "root"
+  "containerEnv": {
+    "JWT_SECRET": "codespace_demo_secret_for_testing_only_2024"
+  },
+  
+  "remoteUser": "vscode"
 }
+

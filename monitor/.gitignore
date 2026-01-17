@@ -2,14 +2,19 @@
 # Smart Patient Room Monitor - Git Ignore
 # ============================================================================
 
+# --- Environment files with secrets (NEVER COMMIT!) ---
+.env
+.env.local
+.env.production
+*.env
+
+# --- BUT allow the example file ---
+!.env.example
+
 # --- Rust ---
 target/
 **/*.rs.bk
 Cargo.lock
-
-# --- Environment ---
-.env
-*.env.local
 
 # --- Database ---
 *.db

@@ -40,9 +40,19 @@ services:
       dockerfile: Dockerfile
     container_name: patient-monitor
     environment:
+      # Server
       - HOST=0.0.0.0
       - PORT=8080
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/patient_monitor
+      # Database
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=patient_monitor
+      # Authentication - JWT Secret from environment (SECURE!)
+      - JWT_SECRET=${JWT_SECRET:-default_dev_secret_change_in_production}
+      - TOKEN_EXPIRATION_HOURS=24
+      # App settings
       - MOCK_MODE=true
       - SOUND_THRESHOLD=150
       - INACTIVITY_SECONDS=300

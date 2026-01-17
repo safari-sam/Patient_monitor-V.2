@@ -13,12 +13,11 @@ use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey}
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Client;
 use tracing::{info, error, warn};
+use std::env;
+use once_cell::sync::Lazy;
 
 use crate::db::Database;
 
-// =============================================================================
-// DATA STRUCTURES
-// =============================================================================
 
 /// Healthcare provider roles (cadres)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -119,17 +118,35 @@ pub struct ErrorResponse {
 }
 
 // =============================================================================
-// JWT CONFIGURATION
+// JWT CONFIGURATION - USING ENVIRONMENT VARIABLES (SECURE!)
 // =============================================================================
 
-// Secret key for JWT signing - in production, use environment variable!
-const JWT_SECRET: &[u8] = b"smart_patient_monitor_secret_key_change_in_production_2024";
-const TOKEN_EXPIRATION_HOURS: i64 = 24;
+/// JWT Secret loaded from environment variable - NEVER HARDCODED!
+static JWT_SECRET: Lazy<String> = Lazy::new(|| {
+    env::var("JWT_SECRET").unwrap_or_else(|_| {
+        warn!("JWT_SECRET not set in environment, using default (NOT SECURE FOR PRODUCTION!)");
+        // Fallback for development only - in production, this should fail
+        "development_only_secret_replace_in_production".to_string()
+    })
+});
+
+/// Token expiration loaded from environment variable
+static TOKEN_EXPIRATION_HOURS: Lazy<i64> = Lazy::new(|| {
+    env::var("TOKEN_EXPIRATION_HOURS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(24)
+});
+
+/// Get JWT secret as bytes
+fn get_jwt_secret() -> &'static [u8] {
+    JWT_SECRET.as_bytes()
+}
 
 /// Generate JWT token for a user
 pub fn generate_token(user: &User) -> Result<String, jsonwebtoken::errors::Error> {
     let now = Utc::now();
-    let expiration = now + Duration::hours(TOKEN_EXPIRATION_HOURS);
+    let expiration = now + Duration::hours(*TOKEN_EXPIRATION_HOURS);
     
     let claims = Claims {
         sub: user.id.to_string(),
@@ -142,7 +159,7 @@ pub fn generate_token(user: &User) -> Result<String, jsonwebtoken::errors::Error
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(JWT_SECRET),
+        &EncodingKey::from_secret(get_jwt_secret()),
     )
 }
 
@@ -150,7 +167,7 @@ pub fn generate_token(user: &User) -> Result<String, jsonwebtoken::errors::Error
 pub fn verify_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
     let token_data = decode::<Claims>(
         token,
-        &DecodingKey::from_secret(JWT_SECRET),
+        &DecodingKey::from_secret(get_jwt_secret()),
         &Validation::default(),
     )?;
     
