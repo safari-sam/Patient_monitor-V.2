@@ -152,6 +152,9 @@ async fn main() -> std::io::Result<()> {
         settings: settings,
     });
     
+    // Register Database separately for auth handlers
+    let db_data = web::Data::new(db.clone());
+    
     let broadcaster_data = web::Data::new(broadcaster);
     
     info!("Starting server on {}:{}", config.host, config.port);
@@ -166,6 +169,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .app_data(app_state.clone())
+            .app_data(db_data.clone())
             .app_data(broadcaster_data.clone())
             .configure(configure_auth_routes)
             .service(api::health_check)
