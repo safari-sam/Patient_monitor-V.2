@@ -29,7 +29,6 @@ The system captures Motion, Sound, and Temperature data, processes it via a high
 * Concurrency Model: Uses a dedicated background thread for serial ingestion and an actor-based model for WebSocket broadcasting.
 * Data Processing:
     * Parses raw CSV streams in real-time.
-    * Applies logic for Fall Detection (Simultaneous High Motion + Loud Sound) and Inactivity Alerts.
 * Interoperability: Transforms all data into FHIR R4 Observation resources using LOINC (8310-5, 89020-2) and SNOMED CT (52821000) codes.
 * Storage: PostgreSQL database with connection pooling for persistent history.
 
