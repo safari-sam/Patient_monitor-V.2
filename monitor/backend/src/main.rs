@@ -7,6 +7,7 @@ mod fhir;
 mod ml_api;
 mod ml_client;
 mod serial;
+mod validation;
 mod websocket;
 
 use actix_cors::Cors;
@@ -37,16 +38,30 @@ struct Config {
 impl Config {
     fn from_env() -> Self {
         dotenvy::dotenv().ok();
-        
+
         Self {
             host: std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
-            port: std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8080),
+            port: std::env::var("PORT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(8080),
             serial_port: std::env::var("SERIAL_PORT").unwrap_or_else(|_| "COM3".to_string()),
-            baud_rate: std::env::var("BAUD_RATE").ok().and_then(|b| b.parse().ok()).unwrap_or(9600),
-            sound_threshold: std::env::var("SOUND_THRESHOLD").ok().and_then(|s| s.parse().ok()).unwrap_or(150),
-            inactivity_seconds: std::env::var("INACTIVITY_SECONDS").ok().and_then(|s| s.parse().ok()).unwrap_or(300),
+            baud_rate: std::env::var("BAUD_RATE")
+                .ok()
+                .and_then(|b| b.parse().ok())
+                .unwrap_or(9600),
+            sound_threshold: std::env::var("SOUND_THRESHOLD")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(150),
+            inactivity_seconds: std::env::var("INACTIVITY_SECONDS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(300),
             db_config: DbConfig::from_env(),
-            mock_mode: std::env::var("MOCK_MODE").map(|v| v == "true" || v == "1").unwrap_or(false),
+            mock_mode: std::env::var("MOCK_MODE")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
         }
     }
 }
@@ -58,46 +73,55 @@ async fn main() -> std::io::Result<()> {
         .with_max_level(Level::INFO)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set subscriber");
-    
+
     info!("========================================");
     info!("  Smart Patient Room Monitor v0.1.0");
     info!("========================================");
-    
+
     let config = Config::from_env();
-    
+
     info!("Server: {}:{}", config.host, config.port);
     info!("Serial: {} @ {} baud", config.serial_port, config.baud_rate);
     info!("Mock mode: {}", config.mock_mode);
-    
+
     // Initialize database
     let db = Database::new(config.db_config)
         .await
         .expect("Failed to initialize database");
-    
+
     // Initialize auth tables
     init_auth_tables(&db)
         .await
         .expect("Failed to initialize auth tables");
-    
+
     // Initialize broadcaster
     let broadcaster = Arc::new(SensorBroadcaster::new(100));
-    
+
     // Initialize ML client
     let ml_client = web::Data::new(MLClient::from_env());
-    info!("ML service URL: {}", std::env::var("ML_SERVICE_URL").unwrap_or_else(|_| "http://ml-service:5001".to_string()));
-    
+    info!(
+        "ML service URL: {}",
+        std::env::var("ML_SERVICE_URL").unwrap_or_else(|_| "http://ml-service:5001".to_string())
+    );
+
     // Check ML service availability
     match ml_client.health_check().await {
-        Ok(health) => info!("✓ ML service available (model loaded: {})", health.model_loaded),
-        Err(e) => info!("⚠ ML service unavailable: {} (will retry on first request)", e),
+        Ok(health) => info!(
+            "✓ ML service available (model loaded: {})",
+            health.model_loaded
+        ),
+        Err(e) => info!(
+            "⚠ ML service unavailable: {} (will retry on first request)",
+            e
+        ),
     }
-    
+
     // Initialize settings (shared between AppState and SerialReader)
     let settings = Arc::new(RwLock::new(MonitorSettings {
         inactivity_seconds: config.inactivity_seconds,
         sound_threshold: config.sound_threshold,
     }));
-    
+
     // Start serial reader
     let serial_config = SerialConfig {
         port: config.serial_port.clone(),
@@ -105,15 +129,15 @@ async fn main() -> std::io::Result<()> {
         sound_threshold: config.sound_threshold,
         inactivity_seconds: config.inactivity_seconds,
     };
-    
+
     let db_for_serial = db.clone();
     let broadcaster_for_serial = Arc::clone(&broadcaster);
     let settings_for_serial = Arc::clone(&settings);
-    
+
     if config.mock_mode {
         info!("Starting in MOCK MODE");
         let mock_reader = serial::MockSerialReader::start();
-        
+
         tokio::spawn(async move {
             loop {
                 if let Some(mut event) = mock_reader.try_recv() {
@@ -129,19 +153,21 @@ async fn main() -> std::io::Result<()> {
     } else {
         info!("Available serial ports:");
         serial::list_available_ports();
-        
+
         match SerialReader::start(serial_config, settings_for_serial) {
             Ok(reader) => {
                 info!("Serial reader started");
-                
+
                 tokio::spawn(async move {
                     loop {
                         if let Some(mut event) = reader.try_recv() {
-                            info!("Sensor: temp={:.1}°C motion={} sound={}",
+                            info!(
+                                "Sensor: temp={:.1}°C motion={} sound={}",
                                 event.reading.temperature,
                                 event.reading.motion,
-                                event.reading.sound_level);
-                            
+                                event.reading.sound_level
+                            );
+
                             match db_for_serial.insert_reading(&event).await {
                                 Ok(id) => event.id = Some(id),
                                 Err(e) => error!("Failed to save: {}", e),
@@ -158,27 +184,27 @@ async fn main() -> std::io::Result<()> {
             }
         }
     }
-    
+
     let app_state = web::Data::new(AppState {
         db: db.clone(),
         base_url: format!("http://{}:{}", config.host, config.port),
-        settings: settings,
+        settings,
     });
-    
+
     // Register Database separately for auth handlers
     let db_data = web::Data::new(db.clone());
-    
+
     let broadcaster_data = web::Data::new(broadcaster);
-    
+
     info!("Starting server on {}:{}", config.host, config.port);
     info!("Dashboard: http://{}:{}", config.host, config.port);
-    
+
     HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
             .allow_any_method()
             .allow_any_header();
-        
+
         App::new()
             .wrap(cors)
             .app_data(app_state.clone())

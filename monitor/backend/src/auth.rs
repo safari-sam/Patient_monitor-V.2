@@ -1,16 +1,14 @@
-
-use actix_web::{web, HttpRequest, HttpResponse, Error, http::header};
+use actix_web::{http::header, web, HttpRequest, HttpResponse};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{Duration, Utc};
-use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
-use serde::{Deserialize, Serialize};
-use tokio_postgres::Client;
-use tracing::{info, error, warn};
-use std::env;
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
+use std::env;
+use tracing::{error, info, warn};
 
 use crate::db::Database;
-
+use crate::validation::{validate_email, validate_length, validate_text_input, validate_username};
 
 /// Healthcare provider roles (cadres)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -35,7 +33,7 @@ impl std::fmt::Display for Cadre {
 
 impl std::str::FromStr for Cadre {
     type Err = String;
-    
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "physician" => Ok(Cadre::Physician),
@@ -73,11 +71,11 @@ pub struct UserInfo {
 /// JWT Claims
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,        // Subject (user_id)
+    pub sub: String, // Subject (user_id)
     pub username: String,
     pub cadre: String,
-    pub exp: usize,         // Expiration time
-    pub iat: usize,         // Issued at
+    pub exp: usize, // Expiration time
+    pub iat: usize, // Issued at
 }
 
 /// Login request
@@ -140,7 +138,7 @@ fn get_jwt_secret() -> &'static [u8] {
 pub fn generate_token(user: &User) -> Result<String, jsonwebtoken::errors::Error> {
     let now = Utc::now();
     let expiration = now + Duration::hours(*TOKEN_EXPIRATION_HOURS);
-    
+
     let claims = Claims {
         sub: user.id.to_string(),
         username: user.username.clone(),
@@ -148,7 +146,7 @@ pub fn generate_token(user: &User) -> Result<String, jsonwebtoken::errors::Error
         exp: expiration.timestamp() as usize,
         iat: now.timestamp() as usize,
     };
-    
+
     encode(
         &Header::default(),
         &claims,
@@ -163,7 +161,7 @@ pub fn verify_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> 
         &DecodingKey::from_secret(get_jwt_secret()),
         &Validation::default(),
     )?;
-    
+
     Ok(token_data.claims)
 }
 
@@ -172,7 +170,7 @@ pub fn verify_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> 
 // =============================================================================
 
 /// Hash a password using bcrypt
-/// 
+///
 /// Bcrypt automatically:
 /// - Generates a random salt
 /// - Applies key stretching (multiple rounds)
@@ -194,9 +192,10 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, bcrypt::Bcryp
 /// Create users table if it doesn't exist
 pub async fn init_auth_tables(db: &Database) -> Result<(), Box<dyn std::error::Error>> {
     let client = db.get_client().await?;
-    
-    client.execute(
-        "CREATE TABLE IF NOT EXISTS users (
+
+    client
+        .execute(
+            "CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             username VARCHAR(50) UNIQUE NOT NULL,
             fullname VARCHAR(100) NOT NULL,
@@ -205,49 +204,57 @@ pub async fn init_auth_tables(db: &Database) -> Result<(), Box<dyn std::error::E
             password_hash VARCHAR(255) NOT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW()
         )",
-        &[],
-    ).await?;
-    
+            &[],
+        )
+        .await?;
+
     info!("Users table initialized");
     Ok(())
 }
 
 /// Create a new user
-pub async fn create_user(
-    db: &Database,
-    signup: &SignupRequest,
-) -> Result<User, String> {
+pub async fn create_user(db: &Database, signup: &SignupRequest) -> Result<User, String> {
     // Validate cadre
-    let _cadre: Cadre = signup.cadre.parse()
-        .map_err(|e: String| e)?;
-    
+    let _cadre: Cadre = signup.cadre.parse().map_err(|e: String| e)?;
+
     // Hash password
-    let password_hash = hash_password(&signup.password)
-        .map_err(|e| format!("Failed to hash password: {}", e))?;
-    
+    let password_hash =
+        hash_password(&signup.password).map_err(|e| format!("Failed to hash password: {}", e))?;
+
     // Insert user
-    let client = db.get_client().await
+    let client = db
+        .get_client()
+        .await
         .map_err(|e| format!("Database connection error: {}", e))?;
-    
-    let row = client.query_one(
-        "INSERT INTO users (username, fullname, email, cadre, password_hash)
+
+    let row = client
+        .query_one(
+            "INSERT INTO users (username, fullname, email, cadre, password_hash)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING id, username, fullname, email, cadre, password_hash, created_at",
-        &[&signup.username, &signup.fullname, &signup.email, &signup.cadre, &password_hash],
-    ).await.map_err(|e| {
-        if e.to_string().contains("unique") {
-            if e.to_string().contains("username") {
-                "Username already exists".to_string()
-            } else if e.to_string().contains("email") {
-                "Email already exists".to_string()
+            &[
+                &signup.username,
+                &signup.fullname,
+                &signup.email,
+                &signup.cadre,
+                &password_hash,
+            ],
+        )
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("unique") {
+                if e.to_string().contains("username") {
+                    "Username already exists".to_string()
+                } else if e.to_string().contains("email") {
+                    "Email already exists".to_string()
+                } else {
+                    "User already exists".to_string()
+                }
             } else {
-                "User already exists".to_string()
+                format!("Database error: {}", e)
             }
-        } else {
-            format!("Database error: {}", e)
-        }
-    })?;
-    
+        })?;
+
     Ok(User {
         id: row.get(0),
         username: row.get(1),
@@ -265,13 +272,15 @@ pub async fn find_user_by_username(
     username: &str,
 ) -> Result<Option<User>, Box<dyn std::error::Error>> {
     let client = db.get_client().await?;
-    
-    let row = client.query_opt(
-        "SELECT id, username, fullname, email, cadre, password_hash, created_at
+
+    let row = client
+        .query_opt(
+            "SELECT id, username, fullname, email, cadre, password_hash, created_at
          FROM users WHERE username = $1",
-        &[&username],
-    ).await?;
-    
+            &[&username],
+        )
+        .await?;
+
     Ok(row.map(|r| User {
         id: r.get(0),
         username: r.get(1),
@@ -293,34 +302,71 @@ pub async fn signup_handler(
     body: web::Json<SignupRequest>,
 ) -> HttpResponse {
     info!("Signup attempt for username: {}", body.username);
-    
-    // Validate input
-    if body.username.len() < 3 {
+
+    // Validate username
+    if let Err(e) = validate_username(&body.username) {
         return HttpResponse::BadRequest().json(ErrorResponse {
-            error: "Username must be at least 3 characters".to_string(),
+            error: e.to_string(),
         });
     }
-    
-    if body.password.len() < 8 {
+
+    // Validate email
+    if let Err(e) = validate_email(&body.email) {
         return HttpResponse::BadRequest().json(ErrorResponse {
-            error: "Password must be at least 8 characters".to_string(),
+            error: e.to_string(),
         });
     }
-    
+
+    // Validate fullname (sanitize and check length)
+    if let Err(e) = validate_length(&body.fullname, 2, 100, "Full name") {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            error: e.to_string(),
+        });
+    }
+
+    // Sanitize fullname
+    let fullname = match validate_text_input(&body.fullname, "Full name") {
+        Ok(sanitized) => sanitized,
+        Err(e) => {
+            return HttpResponse::BadRequest().json(ErrorResponse {
+                error: e.to_string(),
+            });
+        }
+    };
+
+    // Validate password
+    if let Err(e) = validate_length(&body.password, 8, 128, "Password") {
+        return HttpResponse::BadRequest().json(ErrorResponse {
+            error: e.to_string(),
+        });
+    }
+
     // Validate password strength
     let has_uppercase = body.password.chars().any(|c| c.is_uppercase());
     let has_number = body.password.chars().any(|c| c.is_numeric());
-    
+
     if !has_uppercase || !has_number {
         return HttpResponse::BadRequest().json(ErrorResponse {
             error: "Password must contain at least one uppercase letter and one number".to_string(),
         });
     }
-    
-    match create_user(&db, &body).await {
+
+    // Create sanitized signup request
+    let sanitized_body = SignupRequest {
+        fullname,
+        username: body.username.clone(),
+        email: body.email.clone(),
+        cadre: body.cadre.clone(),
+        password: body.password.clone(),
+    };
+
+    match create_user(&db, &sanitized_body).await {
         Ok(user) => {
-            info!("User created successfully: {} ({})", user.username, user.cadre);
-            
+            info!(
+                "User created successfully: {} ({})",
+                user.username, user.cadre
+            );
+
             HttpResponse::Created().json(serde_json::json!({
                 "message": "Account created successfully",
                 "user": UserInfo {
@@ -340,12 +386,9 @@ pub async fn signup_handler(
 }
 
 /// POST /api/auth/login - Authenticate user
-pub async fn login_handler(
-    db: web::Data<Database>,
-    body: web::Json<LoginRequest>,
-) -> HttpResponse {
+pub async fn login_handler(db: web::Data<Database>, body: web::Json<LoginRequest>) -> HttpResponse {
     info!("Login attempt for username: {}", body.username);
-    
+
     // Find user
     let user = match find_user_by_username(&db, &body.username).await {
         Ok(Some(user)) => user,
@@ -362,15 +405,18 @@ pub async fn login_handler(
             });
         }
     };
-    
+
     // Verify password
     match verify_password(&body.password, &user.password_hash) {
         Ok(true) => {
             // Generate token
             match generate_token(&user) {
                 Ok(token) => {
-                    info!("Login successful for user: {} ({})", user.username, user.cadre);
-                    
+                    info!(
+                        "Login successful for user: {} ({})",
+                        user.username, user.cadre
+                    );
+
                     HttpResponse::Ok().json(AuthResponse {
                         token,
                         user: UserInfo {
@@ -409,12 +455,12 @@ pub async fn login_handler(
 pub async fn verify_handler(req: HttpRequest) -> HttpResponse {
     // Extract token from Authorization header
     let auth_header = req.headers().get(header::AUTHORIZATION);
-    
+
     let token = match auth_header {
         Some(value) => {
             let value_str = value.to_str().unwrap_or("");
-            if value_str.starts_with("Bearer ") {
-                &value_str[7..]
+            if let Some(stripped) = value_str.strip_prefix("Bearer ") {
+                stripped
             } else {
                 return HttpResponse::Unauthorized().json(ErrorResponse {
                     error: "Invalid authorization header format".to_string(),
@@ -427,16 +473,14 @@ pub async fn verify_handler(req: HttpRequest) -> HttpResponse {
             });
         }
     };
-    
+
     // Verify token
     match verify_token(token) {
-        Ok(claims) => {
-            HttpResponse::Ok().json(serde_json::json!({
-                "valid": true,
-                "username": claims.username,
-                "cadre": claims.cadre,
-            }))
-        }
+        Ok(claims) => HttpResponse::Ok().json(serde_json::json!({
+            "valid": true,
+            "username": claims.username,
+            "cadre": claims.cadre,
+        })),
         Err(e) => {
             warn!("Token verification failed: {}", e);
             HttpResponse::Unauthorized().json(ErrorResponse {
@@ -447,18 +491,15 @@ pub async fn verify_handler(req: HttpRequest) -> HttpResponse {
 }
 
 /// GET /api/auth/me - Get current user info
-pub async fn me_handler(
-    req: HttpRequest,
-    db: web::Data<Database>,
-) -> HttpResponse {
+pub async fn me_handler(req: HttpRequest, db: web::Data<Database>) -> HttpResponse {
     // Extract and verify token
     let auth_header = req.headers().get(header::AUTHORIZATION);
-    
+
     let token = match auth_header {
         Some(value) => {
             let value_str = value.to_str().unwrap_or("");
-            if value_str.starts_with("Bearer ") {
-                &value_str[7..]
+            if let Some(stripped) = value_str.strip_prefix("Bearer ") {
+                stripped
             } else {
                 return HttpResponse::Unauthorized().json(ErrorResponse {
                     error: "Invalid authorization header".to_string(),
@@ -471,7 +512,7 @@ pub async fn me_handler(
             });
         }
     };
-    
+
     let claims = match verify_token(token) {
         Ok(c) => c,
         Err(_) => {
@@ -480,23 +521,19 @@ pub async fn me_handler(
             });
         }
     };
-    
+
     // Get fresh user data from database
     match find_user_by_username(&db, &claims.username).await {
-        Ok(Some(user)) => {
-            HttpResponse::Ok().json(UserInfo {
-                id: user.id,
-                username: user.username,
-                fullname: user.fullname,
-                email: user.email,
-                cadre: user.cadre,
-            })
-        }
-        Ok(None) => {
-            HttpResponse::NotFound().json(ErrorResponse {
-                error: "User not found".to_string(),
-            })
-        }
+        Ok(Some(user)) => HttpResponse::Ok().json(UserInfo {
+            id: user.id,
+            username: user.username,
+            fullname: user.fullname,
+            email: user.email,
+            cadre: user.cadre,
+        }),
+        Ok(None) => HttpResponse::NotFound().json(ErrorResponse {
+            error: "User not found".to_string(),
+        }),
         Err(e) => {
             error!("Database error: {}", e);
             HttpResponse::InternalServerError().json(ErrorResponse {
@@ -511,14 +548,15 @@ pub async fn me_handler(
 // =============================================================================
 
 /// Extract user from request (for protected routes)
+#[allow(dead_code)]
 pub fn extract_user_from_request(req: &HttpRequest) -> Option<Claims> {
     let auth_header = req.headers().get(header::AUTHORIZATION)?;
     let value_str = auth_header.to_str().ok()?;
-    
+
     if !value_str.starts_with("Bearer ") {
         return None;
     }
-    
+
     let token = &value_str[7..];
     verify_token(token).ok()
 }
@@ -534,6 +572,6 @@ pub fn configure_auth_routes(cfg: &mut web::ServiceConfig) {
             .route("/signup", web::post().to(signup_handler))
             .route("/login", web::post().to(login_handler))
             .route("/verify", web::get().to(verify_handler))
-            .route("/me", web::get().to(me_handler))
+            .route("/me", web::get().to(me_handler)),
     );
 }

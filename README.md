@@ -63,9 +63,120 @@ Simply serve the `frontend` directory using any static file server or open `inde
 
 ---
 
-## 🧪 Testing
-* Includes 81 unit tests covering the Serial Parser, FHIR Transformation, and Alert Logic modules[cite: 73].
-* Run tests with: `cargo test`
+## 🧪 Testing & Quality Assurance
+
+### Automated Testing
+The project includes comprehensive test coverage:
+* **Unit Tests**: 81 tests covering Serial Parser, FHIR Transformation, and Alert Logic
+* **Integration Tests**: Database operations, API endpoints, and FHIR compliance
+* **ML Service Tests**: Training data generation and model validation
+
+Run tests:
+```bash
+cd monitor/backend
+cargo test              # Run all tests
+cargo test --lib        # Unit tests only
+cargo test --test '*'   # Integration tests only
+```
+
+### Code Quality Tools
+
+#### Format Code
+```bash
+cd monitor/backend
+cargo fmt              # Auto-format all Rust code
+cargo fmt --check      # Check formatting without changing files
+```
+
+#### Lint Code
+```bash
+cd monitor/backend
+cargo clippy           # Run Clippy linter
+cargo clippy --fix     # Auto-fix issues where possible
+```
+
+#### Security Audit
+```bash
+cd monitor/backend
+cargo install cargo-audit
+cargo audit            # Check for known security vulnerabilities
+```
+
+---
+
+## 🔄 CI/CD Pipeline
+
+### GitHub Actions Workflow
+Every push and pull request triggers an automated pipeline:
+
+1. **🔍 Lint & Format** - Ensures code style consistency
+2. **🧪 Run Tests** - Executes all unit and integration tests
+3. **🔨 Build** - Compiles release binary
+4. **🐳 Docker Build** - Builds and tests all containers
+5. **🤖 ML Tests** - Validates ML service functionality
+6. **🔒 Security Scan** - Checks for vulnerabilities
+
+View pipeline status: **Actions** tab on GitHub
+
+### Git Hooks
+
+Install pre-commit hooks to catch issues before pushing:
+
+```bash
+# One-time setup
+chmod +x setup-hooks.sh
+./setup-hooks.sh
+```
+
+The pre-commit hook automatically runs:
+- ✅ Code formatting check (`cargo fmt --check`)
+- ✅ Linter (`cargo clippy`)
+- ✅ Unit tests (`cargo test --lib`)
+- ✅ Secret detection (prevents hardcoded passwords)
+
+**Skip hooks** (not recommended):
+```bash
+git commit --no-verify
+```
+
+---
+
+## 📝 Development Workflow
+
+### Making Changes
+
+1. **Create a feature branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Make your changes** and test locally
+   ```bash
+   cd monitor/backend
+   cargo fmt          # Format code
+   cargo clippy       # Check for issues
+   cargo test         # Run tests
+   ```
+
+3. **Commit changes** (pre-commit hook runs automatically)
+   ```bash
+   git add .
+   git commit -m "feat: your descriptive message"
+   ```
+
+4. **Push and create PR**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+   - CI/CD pipeline runs automatically
+   - All checks must pass before merge
+
+### Configuration Files
+
+- **`.github/workflows/ci.yml`** - GitHub Actions CI/CD pipeline
+- **`hooks/pre-commit`** - Git pre-commit hook
+- **`monitor/backend/rustfmt.toml`** - Code formatting rules
+- **`monitor/backend/clippy.toml`** - Linter configuration
 
 ---
 

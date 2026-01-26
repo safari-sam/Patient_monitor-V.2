@@ -5,9 +5,9 @@
 // ============================================================================
 
 use actix_web::{web, HttpResponse};
-use serde::{Deserialize, Serialize};
-use tracing::{info, error};
 use chrono::Timelike;
+use serde::{Deserialize, Serialize};
+use tracing::{error, info};
 
 // Import the ML client
 use crate::ml_client::{MLClient, MLFeatures, MLPrediction};
@@ -49,24 +49,20 @@ pub struct MLHealthResponse {
 // ============================================================================
 
 /// GET /api/ml/health - Check ML service health
-pub async fn ml_health_handler(
-    ml_client: web::Data<MLClient>,
-) -> HttpResponse {
+pub async fn ml_health_handler(ml_client: web::Data<MLClient>) -> HttpResponse {
     match ml_client.health_check().await {
-        Ok(health) => {
-            HttpResponse::Ok().json(MLHealthResponse {
-                ml_service_available: true,
-                model_loaded: health.model_loaded,
-                classes: vec![
-                    "SLEEPING".to_string(),
-                    "RESTING".to_string(),
-                    "ACTIVE".to_string(),
-                    "RESTLESS".to_string(),
-                    "FALL_RISK".to_string(),
-                    "FALL_DETECTED".to_string(),
-                ],
-            })
-        }
+        Ok(health) => HttpResponse::Ok().json(MLHealthResponse {
+            ml_service_available: true,
+            model_loaded: health.model_loaded,
+            classes: vec![
+                "SLEEPING".to_string(),
+                "RESTING".to_string(),
+                "ACTIVE".to_string(),
+                "RESTLESS".to_string(),
+                "FALL_RISK".to_string(),
+                "FALL_DETECTED".to_string(),
+            ],
+        }),
         Err(e) => {
             error!("ML service health check failed: {}", e);
             HttpResponse::ServiceUnavailable().json(serde_json::json!({
@@ -83,12 +79,12 @@ pub async fn classify_handler(
     body: web::Json<ClassifyRequest>,
 ) -> HttpResponse {
     // Prepare features
-    let hour = body.hour_of_day.unwrap_or_else(|| {
-        chrono::Utc::now().hour() as i32
-    });
-    
-    let is_night = if hour >= 22 || hour < 6 { 1 } else { 0 };
-    
+    let hour = body
+        .hour_of_day
+        .unwrap_or_else(|| chrono::Utc::now().hour() as i32);
+
+    let is_night = if !(6..22).contains(&hour) { 1 } else { 0 };
+
     let features = MLFeatures {
         temperature: body.temperature,
         motion_level: body.motion_level,
@@ -97,22 +93,29 @@ pub async fn classify_handler(
         is_night,
         motion_trend: body.motion_trend.unwrap_or(0.0),
     };
-    
+
     // Call ML service
     match ml_client.classify(&features).await {
         Ok(prediction) => {
             let response = ClassificationResponse {
                 activity_class: prediction.activity_class.clone(),
-                activity_display: crate::ml_client::format_activity_class(&prediction.activity_class),
+                activity_display: crate::ml_client::format_activity_class(
+                    &prediction.activity_class,
+                ),
                 confidence: prediction.confidence,
-                risk_level: crate::ml_client::get_risk_level(&prediction.activity_class).to_string(),
-                risk_color: crate::ml_client::get_risk_color(&prediction.activity_class).to_string(),
+                risk_level: crate::ml_client::get_risk_level(&prediction.activity_class)
+                    .to_string(),
+                risk_color: crate::ml_client::get_risk_color(&prediction.activity_class)
+                    .to_string(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
-            
-            info!("Classification: {} (confidence: {:.1}%)", 
-                  response.activity_display, response.confidence * 100.0);
-            
+
+            info!(
+                "Classification: {} (confidence: {:.1}%)",
+                response.activity_display,
+                response.confidence * 100.0
+            );
+
             HttpResponse::Ok().json(response)
         }
         Err(e) => {
@@ -126,9 +129,7 @@ pub async fn classify_handler(
 }
 
 /// GET /api/ml/model/info - Get model information
-pub async fn model_info_handler(
-    ml_client: web::Data<MLClient>,
-) -> HttpResponse {
+pub async fn model_info_handler(ml_client: web::Data<MLClient>) -> HttpResponse {
     match ml_client.get_model_info().await {
         Ok(info) => HttpResponse::Ok().json(info),
         Err(e) => {
@@ -150,7 +151,7 @@ pub fn configure_ml_routes(cfg: &mut web::ServiceConfig) {
         web::scope("/api/ml")
             .route("/health", web::get().to(ml_health_handler))
             .route("/classify", web::post().to(classify_handler))
-            .route("/model/info", web::get().to(model_info_handler))
+            .route("/model/info", web::get().to(model_info_handler)),
     );
 }
 
@@ -160,6 +161,7 @@ pub fn configure_ml_routes(cfg: &mut web::ServiceConfig) {
 
 /// Automatically classify sensor readings as they come in
 /// Call this function whenever a new sensor reading is received
+#[allow(dead_code)]
 pub async fn classify_sensor_reading(
     ml_client: &MLClient,
     temperature: f32,
@@ -172,11 +174,11 @@ pub async fn classify_sensor_reading(
         Some(prev) => (motion_level - prev) as f32,
         None => 0.0,
     };
-    
+
     let now = chrono::Utc::now();
     let hour = now.hour() as i32;
-    let is_night = if hour >= 22 || hour < 6 { 1 } else { 0 };
-    
+    let is_night = if !(6..22).contains(&hour) { 1 } else { 0 };
+
     let features = MLFeatures {
         temperature,
         motion_level,
@@ -185,7 +187,7 @@ pub async fn classify_sensor_reading(
         is_night,
         motion_trend,
     };
-    
+
     match ml_client.classify(&features).await {
         Ok(prediction) => Some(prediction),
         Err(e) => {

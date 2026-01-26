@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use crate::fhir::{AlertType, SensorEvent};
 
@@ -58,11 +58,11 @@ impl SensorBroadcaster {
         let (sender, _) = broadcast::channel(capacity);
         Self { sender }
     }
-    
+
     pub fn subscribe(&self) -> broadcast::Receiver<SensorEvent> {
         self.sender.subscribe()
     }
-    
+
     pub fn broadcast(&self, event: SensorEvent) {
         let _ = self.sender.send(event);
     }
@@ -74,11 +74,11 @@ pub async fn ws_handler(
     broadcaster: web::Data<Arc<SensorBroadcaster>>,
 ) -> Result<HttpResponse, Error> {
     let (response, mut session, mut stream) = actix_ws::handle(&req, stream)?;
-    
+
     info!("New WebSocket connection established");
-    
+
     let mut rx = (**broadcaster).subscribe();
-    
+
     let welcome = WsMessage::Status {
         connected: true,
         message: "Connected to Smart Patient Monitor".to_string(),
@@ -86,10 +86,10 @@ pub async fn ws_handler(
     if let Ok(json) = serde_json::to_string(&welcome) {
         let _ = session.text(json).await;
     }
-    
+
     rt::spawn(async move {
         let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(30));
-        
+
         loop {
             tokio::select! {
                 Some(msg) = stream.recv() => {
@@ -110,7 +110,7 @@ pub async fn ws_handler(
                         _ => {}
                     }
                 }
-                
+
                 Ok(event) = rx.recv() => {
                     let msg = WsMessage::from(&event);
                     if let Ok(json) = serde_json::to_string(&msg) {
@@ -119,7 +119,7 @@ pub async fn ws_handler(
                         }
                     }
                 }
-                
+
                 _ = heartbeat_interval.tick() => {
                     let ping = WsMessage::Ping {
                         timestamp: Utc::now().to_rfc3339(),
@@ -132,9 +132,9 @@ pub async fn ws_handler(
                 }
             }
         }
-        
+
         let _ = session.close(None).await;
     });
-    
+
     Ok(response)
 }

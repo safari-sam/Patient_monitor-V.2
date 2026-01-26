@@ -1,0 +1,30 @@
+# ============================================================================
+# Clippy Linting Configuration
+# ============================================================================
+# This file configures the Rust linter (Clippy).
+# Run: cargo clippy
+# ============================================================================
+
+# Maximum cognitive complexity for functions
+cognitive-complexity-threshold = 25
+
+# Maximum number of lines in a function
+too-many-lines-threshold = 100
+
+# Maximum number of arguments for functions
+too-many-arguments-threshold = 7
+
+# Type complexity threshold
+type-complexity-threshold = 250
+
+# Allowed names in code (won't trigger warnings)
+allowed-idents-below-min-chars = ["x", "y", "z", "i", "j", "k", "n", "id", "db", "ws", "tx", "rx"]
+
+# Standard library functions that should be avoided
+disallowed-methods = []
+
+# Macros that should be avoided
+disallowed-macros = []
+
+# Types that should be avoided
+disallowed-types = []

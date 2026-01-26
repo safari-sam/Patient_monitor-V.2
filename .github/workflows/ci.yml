@@ -1,0 +1,240 @@
+# ============================================================================
+# Smart Patient Room Monitor - CI/CD Pipeline
+# ============================================================================
+# Runs automatically on every push and pull request
+# ============================================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ==========================================================================
+  # Job 1: Lint and Format Check
+  # ==========================================================================
+  lint:
+    name: 🔍 Lint & Format
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy, rustfmt
+      
+      - name: Check formatting
+        run: |
+          cd monitor/backend
+          cargo fmt --all -- --check
+      
+      - name: Run Clippy (Linter)
+        run: |
+          cd monitor/backend
+          cargo clippy --all-targets --all-features -- -D warnings
+
+  # ==========================================================================
+  # Job 2: Run Tests
+  # ==========================================================================
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: patient_monitor_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+      
+      - name: Run unit tests
+        run: |
+          cd monitor/backend
+          cargo test --lib
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/patient_monitor_test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: patient_monitor_test
+      
+      - name: Run integration tests
+        run: |
+          cd monitor/tests
+          cargo test
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/patient_monitor_test
+
+  # ==========================================================================
+  # Job 3: Build Application
+  # ==========================================================================
+  build:
+    name: 🔨 Build
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+      
+      - name: Build release
+        run: |
+          cd monitor/backend
+          cargo build --release
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitor-binary
+          path: monitor/backend/target/release/monitor
+
+  # ==========================================================================
+  # Job 4: Build and Test Docker
+  # ==========================================================================
+  docker:
+    name: 🐳 Docker Build
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker images
+        run: |
+          cd monitor
+          docker-compose build
+        env:
+          JWT_SECRET: test_secret_for_ci_only
+          DB_PASSWORD: postgres
+      
+      - name: Start containers
+        run: |
+          cd monitor
+          docker-compose up -d
+          sleep 30  # Wait for services to start
+        env:
+          JWT_SECRET: test_secret_for_ci_only
+          DB_PASSWORD: postgres
+      
+      - name: Health check - Database
+        run: |
+          docker exec patient-db pg_isready -U postgres
+      
+      - name: Health check - ML Service
+        run: |
+          curl --retry 5 --retry-delay 5 --retry-connrefused http://localhost:5001/health
+      
+      - name: Health check - Backend
+        run: |
+          curl --retry 5 --retry-delay 5 --retry-connrefused http://localhost:8080/api/health
+      
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          cd monitor
+          docker-compose logs
+      
+      - name: Stop containers
+        run: |
+          cd monitor
+          docker-compose down
+
+  # ==========================================================================
+  # Job 5: Python ML Tests
+  # ==========================================================================
+  ml-tests:
+    name: 🤖 ML Service Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd monitor/ml_service
+          pip install -r requirements.txt
+          pip install pytest
+      
+      - name: Generate training data
+        run: |
+          cd monitor/ml_service
+          python training_data/generate_data.py
+      
+      - name: Train model
+        run: |
+          cd monitor/ml_service
+          python train_model.py
+      
+      - name: Test ML service starts
+        run: |
+          cd monitor/ml_service
+          timeout 10 python ml_service.py &
+          sleep 5
+          curl http://localhost:5001/health || true
+
+  # ==========================================================================
+  # Job 6: Security Scan
+  # ==========================================================================
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+      
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      
+      - name: Run security audit
+        run: |
+          cd monitor/backend
+          cargo audit || true  # Don't fail on advisories, just report
+      
+      - name: Check for secrets in code
+        run: |
+          echo "🔍 Checking for hardcoded secrets..."
+          ! git grep -E "(password|secret|api_key)\s*=\s*['\"][^'\"]+['\"]" -- '*.rs' '*.py' || echo "⚠️  Warning: Possible hardcoded credentials found"

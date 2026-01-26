@@ -1,13 +1,14 @@
 //! REST API endpoints
 
 use actix_web::{get, post, web, HttpResponse, Responder};
-use chrono::{Duration, Utc, TimeZone, NaiveTime};
+use chrono::{Duration, NaiveTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 use tracing::{debug, error, info};
 
 use crate::db::Database;
 use crate::fhir::FhirBundle;
+use crate::validation::{validate_limit, validate_time_range_minutes};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MonitorSettings {
@@ -40,11 +41,17 @@ pub struct ApiError {
 
 impl ApiError {
     fn not_found(msg: &str) -> Self {
-        Self { error: "not_found".to_string(), message: msg.to_string() }
+        Self {
+            error: "not_found".to_string(),
+            message: msg.to_string(),
+        }
     }
-    
+
     fn internal_error(msg: &str) -> Self {
-        Self { error: "internal_error".to_string(), message: msg.to_string() }
+        Self {
+            error: "internal_error".to_string(),
+            message: msg.to_string(),
+        }
     }
 }
 
@@ -64,17 +71,34 @@ pub async fn list_observations(
     query: web::Query<ListObservationsQuery>,
 ) -> impl Responder {
     debug!("GET /api/observations");
-    
-    let limit = query._count.min(1000).max(1);
-    
+
+    // Validate limit
+    let limit = match validate_limit(query._count, 1000) {
+        Ok(l) => l,
+        Err(e) => {
+            return HttpResponse::BadRequest().json(ApiError {
+                error: "invalid_parameter".to_string(),
+                message: e.to_string(),
+            })
+        }
+    };
+
     let result = if let Some(minutes) = query.minutes {
+        // Validate time range
+        if let Err(e) = validate_time_range_minutes(minutes) {
+            return HttpResponse::BadRequest().json(ApiError {
+                error: "invalid_parameter".to_string(),
+                message: e.to_string(),
+            });
+        }
+
         let end = Utc::now();
         let start = end - Duration::minutes(minutes);
         state.db.get_readings_in_range(start, end).await
     } else {
         state.db.get_recent_readings(limit).await
     };
-    
+
     match result {
         Ok(events) => {
             let bundle = FhirBundle::from_events(events, &state.base_url);
@@ -93,7 +117,7 @@ pub async fn list_observations(
 #[get("/api/observations/latest")]
 pub async fn get_latest_observation(state: web::Data<AppState>) -> impl Responder {
     debug!("GET /api/observations/latest");
-    
+
     match state.db.get_recent_readings(1).await {
         Ok(events) => {
             if let Some(event) = events.into_iter().next() {
@@ -102,8 +126,7 @@ pub async fn get_latest_observation(state: web::Data<AppState>) -> impl Responde
                     .content_type("application/fhir+json")
                     .json(observation)
             } else {
-                HttpResponse::NotFound()
-                    .json(ApiError::not_found("No observations recorded yet"))
+                HttpResponse::NotFound().json(ApiError::not_found("No observations recorded yet"))
             }
         }
         Err(e) => {
@@ -121,7 +144,7 @@ pub async fn get_observation_by_id(
 ) -> impl Responder {
     let id = path.into_inner();
     debug!("GET /api/observations/{}", id);
-    
+
     match state.db.get_reading_by_id(id).await {
         Ok(Some(event)) => {
             let observation = event.to_fhir(&state.base_url);
@@ -129,10 +152,10 @@ pub async fn get_observation_by_id(
                 .content_type("application/fhir+json")
                 .json(observation)
         }
-        Ok(None) => {
-            HttpResponse::NotFound()
-                .json(ApiError::not_found(&format!("Observation {} not found", id)))
-        }
+        Ok(None) => HttpResponse::NotFound().json(ApiError::not_found(&format!(
+            "Observation {} not found",
+            id
+        ))),
         Err(e) => {
             error!("Database error: {}", e);
             HttpResponse::InternalServerError()
@@ -144,17 +167,15 @@ pub async fn get_observation_by_id(
 #[get("/api/summary")]
 pub async fn get_summary(state: web::Data<AppState>) -> impl Responder {
     debug!("GET /api/summary");
-    
+
     match state.db.get_alert_summary().await {
-        Ok(summary) => {
-            HttpResponse::Ok().json(SummaryResponse {
-                total_readings: summary.total_readings,
-                fall_alerts: summary.fall_alerts,
-                inactivity_alerts: summary.inactivity_alerts,
-                system_status: "active".to_string(),
-                last_updated: Utc::now().to_rfc3339(),
-            })
-        }
+        Ok(summary) => HttpResponse::Ok().json(SummaryResponse {
+            total_readings: summary.total_readings,
+            fall_alerts: summary.fall_alerts,
+            inactivity_alerts: summary.inactivity_alerts,
+            system_status: "active".to_string(),
+            last_updated: Utc::now().to_rfc3339(),
+        }),
         Err(e) => {
             error!("Database error: {}", e);
             HttpResponse::InternalServerError()
@@ -183,7 +204,7 @@ pub struct ActivityQuery {
 }
 
 /// GET /api/activity/sleep
-/// 
+///
 /// Analyze sleep activity (default 10 PM to 6 AM)
 /// Example: /api/activity/sleep?start_hour=22&end_hour=6&date=2024-01-15
 #[get("/api/activity/sleep")]
@@ -192,10 +213,10 @@ pub async fn get_sleep_analysis(
     query: web::Query<ActivityQuery>,
 ) -> impl Responder {
     debug!("GET /api/activity/sleep");
-    
+
     let start_hour = query.start_hour.unwrap_or(22);
     let end_hour = query.end_hour.unwrap_or(6);
-    
+
     // Parse date or use today
     let base_date = if let Some(date_str) = &query.date {
         chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
@@ -203,22 +224,20 @@ pub async fn get_sleep_analysis(
     } else {
         Utc::now().date_naive()
     };
-    
+
     // Calculate start and end times
-    let start = Utc.from_utc_datetime(
-        &base_date.and_time(NaiveTime::from_hms_opt(start_hour, 0, 0).unwrap())
-    );
-    
+    let start = Utc
+        .from_utc_datetime(&base_date.and_time(NaiveTime::from_hms_opt(start_hour, 0, 0).unwrap()));
+
     // If end_hour < start_hour, it's the next day
     let end_date = if end_hour < start_hour {
         base_date + chrono::Duration::days(1)
     } else {
         base_date
     };
-    let end = Utc.from_utc_datetime(
-        &end_date.and_time(NaiveTime::from_hms_opt(end_hour, 0, 0).unwrap())
-    );
-    
+    let end =
+        Utc.from_utc_datetime(&end_date.and_time(NaiveTime::from_hms_opt(end_hour, 0, 0).unwrap()));
+
     match state.db.get_activity_analysis(start, end).await {
         Ok(analysis) => HttpResponse::Ok().json(analysis),
         Err(e) => {
@@ -230,7 +249,7 @@ pub async fn get_sleep_analysis(
 }
 
 /// GET /api/activity/period
-/// 
+///
 /// Analyze activity for custom time period
 /// Example: /api/activity/period?minutes=60 (last 60 minutes)
 #[get("/api/activity/period")]
@@ -239,11 +258,11 @@ pub async fn get_period_analysis(
     query: web::Query<ListObservationsQuery>,
 ) -> impl Responder {
     debug!("GET /api/activity/period");
-    
+
     let minutes = query.minutes.unwrap_or(60);
     let end = Utc::now();
     let start = end - Duration::minutes(minutes);
-    
+
     match state.db.get_activity_analysis(start, end).await {
         Ok(analysis) => HttpResponse::Ok().json(analysis),
         Err(e) => {
@@ -255,7 +274,7 @@ pub async fn get_period_analysis(
 }
 
 /// GET /api/activity/hourly
-/// 
+///
 /// Get hourly activity breakdown for a day
 /// Example: /api/activity/hourly?date=2024-01-15
 #[get("/api/activity/hourly")]
@@ -264,7 +283,7 @@ pub async fn get_hourly_analysis(
     query: web::Query<ActivityQuery>,
 ) -> impl Responder {
     debug!("GET /api/activity/hourly");
-    
+
     let date = if let Some(date_str) = &query.date {
         chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
             .map(|d| Utc.from_utc_datetime(&d.and_hms_opt(0, 0, 0).unwrap()))
@@ -272,7 +291,7 @@ pub async fn get_hourly_analysis(
     } else {
         Utc::now()
     };
-    
+
     match state.db.get_hourly_activity(date).await {
         Ok(hourly) => HttpResponse::Ok().json(hourly),
         Err(e) => {
@@ -300,10 +319,12 @@ pub async fn update_settings(
     let mut settings = state.settings.write().unwrap();
     settings.inactivity_seconds = body.inactivity_seconds;
     settings.sound_threshold = body.sound_threshold;
-    
-    info!("Settings updated: inactivity={}s, sound_threshold={}", 
-        settings.inactivity_seconds, settings.sound_threshold);
-    
+
+    info!(
+        "Settings updated: inactivity={}s, sound_threshold={}",
+        settings.inactivity_seconds, settings.sound_threshold
+    );
+
     HttpResponse::Ok().json(serde_json::json!({
         "status": "ok",
         "message": "Settings updated successfully"

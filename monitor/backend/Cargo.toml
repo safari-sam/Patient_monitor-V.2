@@ -31,3 +31,6 @@ once_cell = "1.19"    # For lazy static initialization of JWT_SECRET
 
 # ML service integration
 reqwest = { version = "0.11", features = ["json"] }
+
+# Input validation and security
+regex = "1.10"

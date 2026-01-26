@@ -58,7 +58,8 @@ ENV PORT=8080
 ENV DB_HOST=db
 ENV DB_PORT=5432
 ENV DB_USER=postgres
-ENV DB_PASSWORD=postgres
+# DB_PASSWORD should be set via docker-compose or runtime environment
+# DO NOT hardcode passwords in Dockerfile!
 ENV DB_NAME=patient_monitor
 ENV MOCK_MODE=true
 ENV SOUND_THRESHOLD=150

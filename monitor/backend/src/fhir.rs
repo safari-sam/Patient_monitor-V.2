@@ -4,6 +4,12 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+// Validation functions available for future use
+// use crate::validation::{
+//     validate_fhir_resource_type, validate_observation_status, validate_temperature,
+//     validate_motion_level, validate_sound_level,
+// };
+
 // ============================================================================
 // CORE SENSOR DATA
 // ============================================================================
@@ -12,7 +18,7 @@ use uuid::Uuid;
 pub struct SensorReading {
     pub temperature: f32,
     pub motion: bool,
-    pub sound_level: i32,  // Integer for sound level
+    pub sound_level: i32, // Integer for sound level
     pub timestamp: DateTime<Utc>,
 }
 
@@ -120,13 +126,14 @@ pub struct FhirBundle {
 // ============================================================================
 
 impl SensorEvent {
-    pub fn to_fhir(&self, base_url: &str) -> FhirObservation {
-        let obs_id = self.id
+    pub fn to_fhir(&self, _base_url: &str) -> FhirObservation {
+        let obs_id = self
+            .id
             .map(|id| format!("observation-{}", id))
             .unwrap_or_else(|| format!("observation-{}", Uuid::new_v4()));
-        
+
         let timestamp = self.reading.timestamp.to_rfc3339();
-        
+
         let mut components = vec![
             FhirObservationComponent {
                 code: FhirCodeableConcept {
@@ -176,12 +183,14 @@ impl SensorEvent {
                 value_string: None,
             },
         ];
-        
+
         if self.alert != AlertType::None {
             components.push(FhirObservationComponent {
                 code: FhirCodeableConcept {
                     coding: vec![FhirCoding {
-                        system: "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation".to_string(),
+                        system:
+                            "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation"
+                                .to_string(),
                         code: "AA".to_string(),
                         display: "Critical abnormal".to_string(),
                     }],
@@ -197,11 +206,12 @@ impl SensorEvent {
                 }),
             });
         }
-        
+
         let interpretation = if self.alert != AlertType::None {
             Some(vec![FhirCodeableConcept {
                 coding: vec![FhirCoding {
-                    system: "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation".to_string(),
+                    system: "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation"
+                        .to_string(),
                     code: "AA".to_string(),
                     display: "Critical abnormal".to_string(),
                 }],
@@ -214,14 +224,15 @@ impl SensorEvent {
         } else {
             None
         };
-        
+
         FhirObservation {
             resource_type: "Observation".to_string(),
             id: obs_id,
             status: "final".to_string(),
             category: vec![FhirCodeableConcept {
                 coding: vec![FhirCoding {
-                    system: "http://terminology.hl7.org/CodeSystem/observation-category".to_string(),
+                    system: "http://terminology.hl7.org/CodeSystem/observation-category"
+                        .to_string(),
                     code: "vital-signs".to_string(),
                     display: "Vital Signs".to_string(),
                 }],
@@ -259,7 +270,7 @@ impl FhirBundle {
                 }
             })
             .collect();
-        
+
         FhirBundle {
             resource_type: "Bundle".to_string(),
             id: Uuid::new_v4().to_string(),

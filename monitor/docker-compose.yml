@@ -71,7 +71,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=patient_monitor
       # Authentication - JWT Secret from GitHub Secrets
-      - JWT_SECRET=${JWT_SECRET}
+      - JWT_SECRET=${JWT_SECRET:-development_only_secret_replace_in_production}
       - TOKEN_EXPIRATION_HOURS=24
       # ML Service
       - ML_SERVICE_URL=http://ml-service:5001
