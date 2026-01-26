@@ -25,6 +25,31 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - patient-monitor-network
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # Python ML Service
+  # --------------------------------------------------------------------------
+  ml-service:
+    build:
+      context: ./ml_service
+      dockerfile: Dockerfile
+    container_name: ml-service
+    environment:
+      - ML_PORT=5001
+      - DEBUG=false
+    ports:
+      - "5001:5001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    networks:
+      - patient-monitor-network
     restart: unless-stopped
 
   # --------------------------------------------------------------------------
@@ -48,6 +73,8 @@ services:
       # Authentication - JWT Secret from GitHub Secrets
       - JWT_SECRET=${JWT_SECRET}
       - TOKEN_EXPIRATION_HOURS=24
+      # ML Service
+      - ML_SERVICE_URL=http://ml-service:5001
       # App settings
       - MOCK_MODE=true
       - SOUND_THRESHOLD=150
@@ -58,8 +85,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      ml-service:
+        condition: service_healthy
+    networks:
+      - patient-monitor-network
     restart: unless-stopped
 
 # Persistent volume for database
 volumes:
   postgres_data:
+
+# Docker network for inter-service communication
+networks:
+  patient-monitor-network:
+    driver: bridge

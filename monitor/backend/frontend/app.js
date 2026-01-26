@@ -89,6 +89,13 @@ function handleSensorReading(reading) {
     updateLastTime();
     addEventToTable(reading);
     
+    // Call ML classification for new reading
+    classifySensorReading(
+        reading.temperature,
+        reading.motion,
+        reading.soundLevel
+    );
+    
     if (reading.alert) {
         showAlert(reading.alert);
         if (reading.alert === 'FALL_DETECTED') {
@@ -1371,6 +1378,204 @@ function updateEventsTable(entries) {
 }
 
 // ============================================================================
+// ML Classification Integration
+// ============================================================================
+
+// Activity icons mapping
+const activityIcons = {
+    'SLEEPING': '😴',
+    'RESTING': '🛋️',
+    'ACTIVE': '🚶',
+    'RESTLESS': '😰',
+    'FALL_RISK': '⚠️',
+    'FALL_DETECTED': '🚨'
+};
+
+// Risk level CSS classes
+const riskClasses = {
+    'LOW': 'risk-low',
+    'NORMAL': 'risk-normal',
+    'MEDIUM': 'risk-medium',
+    'HIGH': 'risk-high',
+    'CRITICAL': 'risk-critical'
+};
+
+// ML classification history
+let mlHistory = [];
+const MAX_HISTORY = 10;
+
+// Check ML service health
+async function checkMLHealth() {
+    try {
+        const response = await fetch(`${CONFIG.apiUrl}/ml/health`);
+        const health = await response.json();
+        
+        const statusBadge = document.getElementById('ml-status');
+        if (health.ml_service_available && health.model_loaded) {
+            statusBadge.textContent = 'Service Active';
+            statusBadge.className = 'ml-status-badge ml-status-active';
+            return true;
+        } else {
+            statusBadge.textContent = 'Service Unavailable';
+            statusBadge.className = 'ml-status-badge ml-status-inactive';
+            return false;
+        }
+    } catch (error) {
+        console.error('ML health check failed:', error);
+        const statusBadge = document.getElementById('ml-status');
+        statusBadge.textContent = 'Service Offline';
+        statusBadge.className = 'ml-status-badge ml-status-inactive';
+        return false;
+    }
+}
+
+// Classify current sensor reading
+async function classifySensorReading(temperature, motion, soundLevel) {
+    try {
+        // Convert motion boolean to motion level (0-100 scale)
+        const motionLevel = motion ? 75 : 15; // Active: 75, Inactive: 15
+        
+        const response = await fetch(`${CONFIG.apiUrl}/ml/classify`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                temperature: temperature,
+                motion_level: motionLevel,
+                sound_level: soundLevel,
+            })
+        });
+        
+        if (!response.ok) {
+            console.error('ML classification failed:', response.statusText);
+            return null;
+        }
+        
+        const prediction = await response.json();
+        console.log('ML Prediction:', prediction);
+        
+        // Update display
+        updateMLDisplay(prediction);
+        
+        // Add to history
+        addToHistory(prediction);
+        
+        // Check for critical alerts
+        if (prediction.activity_class === 'FALL_DETECTED' && prediction.confidence > 0.7) {
+            console.warn('⚠️ FALL DETECTED BY ML with high confidence!');
+            // Could trigger additional alerts here
+        }
+        
+        return prediction;
+    } catch (error) {
+        console.error('ML classification error:', error);
+        return null;
+    }
+}
+
+// Update ML display with prediction
+function updateMLDisplay(prediction) {
+    // Update icon
+    const iconEl = document.getElementById('activity-icon');
+    iconEl.textContent = activityIcons[prediction.activity_class] || '❓';
+    
+    // Update class name
+    const classEl = document.getElementById('activity-class');
+    classEl.textContent = prediction.activity_display;
+    classEl.style.color = prediction.risk_color;
+    
+    // Update confidence
+    const confEl = document.getElementById('activity-confidence');
+    confEl.textContent = `Confidence: ${(prediction.confidence * 100).toFixed(1)}%`;
+    
+    // Update risk badge
+    const riskEl = document.getElementById('risk-badge');
+    riskEl.textContent = prediction.risk_level;
+    riskEl.className = `risk-badge ${riskClasses[prediction.risk_level] || 'risk-normal'}`;
+    
+    // Update confidence bars if we have scores
+    if (prediction.confidence_scores) {
+        updateConfidenceBars(prediction.confidence_scores);
+    }
+}
+
+// Update confidence bars
+function updateConfidenceBars(scores) {
+    const container = document.getElementById('confidence-bars');
+    container.innerHTML = '';
+    
+    // Sort by confidence
+    const sorted = Object.entries(scores)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5); // Top 5
+    
+    sorted.forEach(([cls, score]) => {
+        const color = getClassColor(cls);
+        container.innerHTML += `
+            <div class="confidence-bar-item">
+                <span class="confidence-label">${cls.replace(/_/g, ' ')}</span>
+                <div class="confidence-bar-bg">
+                    <div class="confidence-bar-fill" style="width: ${score * 100}%; background-color: ${color};"></div>
+                </div>
+                <span class="confidence-value">${(score * 100).toFixed(0)}%</span>
+            </div>
+        `;
+    });
+}
+
+// Get color for activity class
+function getClassColor(cls) {
+    const colors = {
+        'SLEEPING': '#22c55e',
+        'RESTING': '#22c55e',
+        'ACTIVE': '#3b82f6',
+        'RESTLESS': '#f59e0b',
+        'FALL_RISK': '#ef4444',
+        'FALL_DETECTED': '#dc2626'
+    };
+    return colors[cls] || '#6b7280';
+}
+
+// Add prediction to history
+function addToHistory(prediction) {
+    mlHistory.unshift({
+        time: new Date().toLocaleTimeString(),
+        class: prediction.activity_display,
+        confidence: prediction.confidence,
+        color: prediction.risk_color
+    });
+    
+    if (mlHistory.length > MAX_HISTORY) {
+        mlHistory.pop();
+    }
+    
+    updateHistoryDisplay();
+}
+
+// Update history display
+function updateHistoryDisplay() {
+    const container = document.getElementById('ml-history-list');
+    container.innerHTML = mlHistory.map(item => `
+        <div class="ml-history-item">
+            <span class="ml-history-time">${item.time}</span>
+            <span class="ml-history-class" style="color: ${item.color}">
+                ${item.class} (${(item.confidence * 100).toFixed(0)}%)
+            </span>
+        </div>
+    `).join('');
+}
+
+// Initialize ML display
+async function initML() {
+    console.log('Initializing ML classification...');
+    await checkMLHealth();
+    
+    // Check health periodically
+    setInterval(checkMLHealth, 60000); // Every minute
+}
+
+// ============================================================================
 // Initialization
 // ============================================================================
 
@@ -1380,6 +1585,7 @@ function init() {
     connectWebSocket();
     fetchHistory();
     fetchSummary();
+    initML();  // Initialize ML classification
     
     window.addEventListener('resize', () => {
         initCharts();

@@ -199,6 +199,75 @@
                 </div>
             </div>
 
+            <!-- ML Classification & Events Section -->
+            <div class="ml-events-container">
+                <!-- ML Classification Card -->
+                <div class="ml-classification-card">
+                    <div class="ml-card-header">
+                        <div class="ml-card-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M12 6v6l4 2"/>
+                            </svg>
+                            ML Activity Classification
+                        </div>
+                        <span class="ml-status-badge ml-status-inactive" id="ml-status">
+                            Service Checking...
+                        </span>
+                    </div>
+                    
+                    <div class="activity-display">
+                        <div class="activity-icon" id="activity-icon">❓</div>
+                        <div class="activity-class" id="activity-class">Waiting for data...</div>
+                        <div class="activity-confidence" id="activity-confidence">--</div>
+                        <span class="risk-badge risk-normal" id="risk-badge">NORMAL</span>
+                    </div>
+                    
+                    <div class="confidence-bars" id="confidence-bars">
+                        <!-- Confidence bars will be populated by JavaScript -->
+                    </div>
+                    
+                    <div class="ml-history">
+                        <h4 style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 10px;">Recent Classifications</h4>
+                        <div id="ml-history-list">
+                            <!-- History items will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Events Table -->
+                <div class="events-card">
+                    <div class="events-header">
+                        <h2>Recent Events</h2>
+                        <button class="refresh-btn" onclick="fetchHistory()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M23 4v6h-6M1 20v-6h6"/>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                            </svg>
+                            Refresh
+                        </button>
+                    </div>
+                    <div class="events-table-container">
+                        <table class="events-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Temperature</th>
+                                    <th>Motion</th>
+                                    <th>Sound</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="eventsBody">
+                                <tr>
+                                    <td colspan="5" class="loading-cell">Loading data...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Charts Section -->
             <div class="charts-grid">
                 <div class="chart-card main-chart">
@@ -224,38 +293,6 @@
                         <span class="chart-subtitle">Last 60 readings</span>
                     </div>
                     <div class="chart-body" id="motionChart"></div>
-                </div>
-            </div>
-
-            <!-- Events Table -->
-            <div class="events-card">
-                <div class="events-header">
-                    <h2>Recent Events</h2>
-                    <button class="refresh-btn" onclick="fetchHistory()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                            <path d="M23 4v6h-6M1 20v-6h6"/>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                        </svg>
-                        Refresh
-                    </button>
-                </div>
-                <div class="events-table-container">
-                    <table class="events-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Temperature</th>
-                                <th>Motion</th>
-                                <th>Sound</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="eventsBody">
-                            <tr>
-                                <td colspan="5" class="loading-cell">Loading data...</td>
-                            </tr>
-                        </tbody>
-                    </table>
                 </div>
             </div>
         </main>

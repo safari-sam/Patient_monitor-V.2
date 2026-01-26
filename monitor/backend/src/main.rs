@@ -4,6 +4,8 @@ mod api;
 mod auth;
 mod db;
 mod fhir;
+mod ml_api;
+mod ml_client;
 mod serial;
 mod websocket;
 
@@ -17,6 +19,7 @@ use tracing_subscriber::FmtSubscriber;
 use crate::api::{AppState, MonitorSettings};
 use crate::auth::{configure_auth_routes, init_auth_tables};
 use crate::db::{Database, DbConfig};
+use crate::ml_client::MLClient;
 use crate::serial::{SerialConfig, SerialReader};
 use crate::websocket::SensorBroadcaster;
 
@@ -78,6 +81,16 @@ async fn main() -> std::io::Result<()> {
     
     // Initialize broadcaster
     let broadcaster = Arc::new(SensorBroadcaster::new(100));
+    
+    // Initialize ML client
+    let ml_client = web::Data::new(MLClient::from_env());
+    info!("ML service URL: {}", std::env::var("ML_SERVICE_URL").unwrap_or_else(|_| "http://ml-service:5001".to_string()));
+    
+    // Check ML service availability
+    match ml_client.health_check().await {
+        Ok(health) => info!("✓ ML service available (model loaded: {})", health.model_loaded),
+        Err(e) => info!("⚠ ML service unavailable: {} (will retry on first request)", e),
+    }
     
     // Initialize settings (shared between AppState and SerialReader)
     let settings = Arc::new(RwLock::new(MonitorSettings {
@@ -171,7 +184,9 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.clone())
             .app_data(db_data.clone())
             .app_data(broadcaster_data.clone())
+            .app_data(ml_client.clone())
             .configure(configure_auth_routes)
+            .configure(ml_api::configure_ml_routes)
             .service(api::health_check)
             .service(api::list_observations)
             .service(api::get_latest_observation)
