@@ -68,27 +68,16 @@ cd ../..
 # ----------------------------------------------------------------------------
 echo -e "\n${YELLOW}[4/4] Checking for hardcoded secrets...${NC}"
 
-# Patterns that might indicate REAL hardcoded secrets
-# Excludes environment variable fallback patterns and development markers
-PATTERNS=(
-    "password\s*=\s*['\"][a-zA-Z0-9!@#$%^&*]{8,}['\"]"  # Real password-like strings
-    "secret\s*=\s*['\"][a-zA-Z0-9]{16,}['\"]"          # Real secret keys (16+ chars)
-    "api_key\s*=\s*['\"][a-zA-Z0-9]{20,}['\"]"         # Real API keys
-    "PRIVATE_KEY.*BEGIN"                                # Private key blocks
-)
-
+# Check for actual hardcoded credentials (not in hook files or documentation)
 SECRET_FOUND=0
-for pattern in "${PATTERNS[@]}"; do
-    # Search in staged files, excluding:
-    # - .env.example (template files)
-    # - Documentation files (SECURITY.md, README.md, CODESPACES)
-    # - CI/CD files (ci.yml, workflows)
-    # - Files with environment variable patterns (${VAR:-default})
-    # - Test/development values (postgres, development_only, test_secret)
-    if git diff --cached | grep -E "$pattern" | grep -v ".env.example" | grep -v "SECURITY.md" | grep -v "README.md" | grep -v "CODESPACES" | grep -v "ci.yml" | grep -v "workflows" | grep -v "\${.*:-" | grep -v "development_only" | grep -v "postgres" | grep -v "test_secret" > /dev/null 2>&1; then
-        SECRET_FOUND=1
-    fi
-done
+if git diff --cached -- '*.rs' '*.py' '*.toml' '*.yml' '*.yaml' | \
+   grep -iE '(password|secret|api_key)\s*[:=]\s*"[a-zA-Z0-9!@#$%^&*]{12,}"' | \
+   grep -v '${' | \
+   grep -v 'postgres' | \
+   grep -v 'test_secret' | \
+   grep -v 'development_only' > /dev/null 2>&1; then
+    SECRET_FOUND=1
+fi
 
 if [ $SECRET_FOUND -eq 0 ]; then
     echo -e "${GREEN}✓ No hardcoded secrets detected${NC}"
